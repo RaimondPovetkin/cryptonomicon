@@ -1,45 +1,66 @@
 const API_KEY = "b9f11e3e45e948a1b60158d50b5c7ee1083347d6cb65fbeba2adce60edeec28f";
 
-const tickersHandlers = new Map(); // тут будет храниться список ф-й, которые нам нужно вызвать при изменении определенного тикера
+const tickersHandlers = new Map();
+const socket = new WebSocket(
+    `wss://streamer.cryptocompare.com/v2?api_key=${API_KEY}`
+);
 
-//TODO: refactor to use URLSearchParams
-const loadTickers = () => {
-    if (tickersHandlers.size === 0) {
+const AGGREGATE_INDEX = "5";
+
+socket.addEventListener("message", e => {    // когда сокет получает сообщение
+
+    const { TYPE: type, FROMSYMBOL: currency, PRICE: newPrice, MESSAGE: myMessage } = JSON.parse(   // берем данные которые нам нужны
+        e.data
+    );
+    console.log({ TYPE: type, FROMSYMBOL: currency, PRICE: newPrice, MESSAGE: myMessage });
+    if(myMessage === "INVALID_SUB"){
+        console.log("pidr" + currency);
+    }
+    if (type !== AGGREGATE_INDEX || newPrice === undefined) {
         return;
     }
 
-    console.log(tickersHandlers);
+    const handlers = tickersHandlers.get(currency) ?? []; // handlers хранит ф-ю (newPrice => this.updateTicker(ticker.name, newPrice))
+    handlers.forEach(fn => fn(newPrice));// выполняется ф-я обновления цены
+});
 
-    fetch(
-        `https://min-api.cryptocompare.com/data/pricemulti?fsyms=${[
-            ...tickersHandlers.keys()
-        ].join(",")}&tsyms=USD&api_key=${API_KEY}`
-    )
-        .then(r => r.json())
-        .then(rawData => {
-            const updatedPrices = Object.fromEntries(
-                Object.entries(rawData).map(([key, value]) => [key, value.USD]) // {a:1 , b:2} => {['a',1], ['b',2]} => [['a',1],['b',0.5]] => {a:1 , b:0.5}
-            );
+function sendToWebSocket(message) {
+    const stringifiedMessage = JSON.stringify(message);
 
-            Object.entries(updatedPrices).forEach(([currency, newPrice]) => {
-                const handlers = tickersHandlers.get(currency) ?? [];  // берем из map-а все функции
-                handlers.forEach(fn => fn(newPrice)); // вызываем их
-            });
-        });
-};
+    if (socket.readyState === WebSocket.OPEN) { // если уже подключен
+        socket.send(stringifiedMessage); // шлём сообщение
+        return;
+    }
+
+    socket.addEventListener("open",() => // когда сокет откроется
+        {
+            socket.send(stringifiedMessage); // шлём сообщение
+        },
+        { once: true } //обработчик должен быть вызван не более одного раза после добавления. Если true, обработчик автоматически удаляется при вызове
+    );
+}
+
+function subscribeToTickerOnWs(ticker) { // подписываемся на тикер при помощи cryptoCompare API
+    sendToWebSocket({
+        action: "SubAdd",
+        subs: [`5~CCCAGG~${ticker}~USD`]
+    });
+}
+
+function unsubscribeFromTickerOnWs(ticker) { // отписываемся от тикера при помощи cryptoCompare API
+    sendToWebSocket({
+        action: "SubRemove",
+        subs: [`5~CCCAGG~${ticker}~USD`]
+    });
+}
 
 export const subscribeToTicker = (ticker, cb) => { // добавляем cb к тикеру
     const subscribers = tickersHandlers.get(ticker) || [];
     tickersHandlers.set(ticker, [...subscribers, cb]);
+    subscribeToTickerOnWs(ticker); // подписываемся на поток ws
 };
 
-export const unsubscribeFromTicker = ticker => { // вытягиваем всех кто подписан на этот тикер и оставляем ф-ю отличную от этого колбэка (cb)
+export const unsubscribeFromTicker = ticker => { // удаляем тикер из map
     tickersHandlers.delete(ticker);
+    unsubscribeFromTickerOnWs(ticker);// отписываемся от потока ws
 };
-
-setInterval(loadTickers, 5000); // каждые 5с обновляются только те тикеры, которые есть в списке
-
-window.tickers = tickersHandlers;
-
-// получить стоимость криптовалютных пар с АПИшки?
-// получать ОБНОВЛЕНИЯ стоимости криптовалютных пар с АПИШки

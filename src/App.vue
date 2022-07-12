@@ -185,7 +185,7 @@ export default {
 
   created() {
     const windowData = Object.fromEntries(
-        new URL(window.location).searchParams.entries() // берем данные из адресной строки
+        new URL(window.location).searchParams.entries()  // берем данные из адресной строки
     );
 
     const VALID_KEYS = ["filter", "page"];
@@ -196,17 +196,9 @@ export default {
       }
     });
 
-    // if (windowData.filter) {
-    //   this.filter = windowData.filter;
-    // }
+    const tickersData = localStorage.getItem("cryptonomicon-list"); // берем данные из localStorage
 
-    // if (windowData.page) {
-    //   this.page = windowData.page;
-    // }
-
-    const tickersData = localStorage.getItem("cryptonomicon-list");
-
-    if (tickersData) {
+    if (tickersData) { // если там есть данные
       this.tickers = JSON.parse(tickersData);
       this.tickers.forEach(ticker => {
         subscribeToTicker(ticker.name, newPrice =>
@@ -214,8 +206,6 @@ export default {
         );
       });
     }
-
-    setInterval(this.updateTicker, 5000);
   },
 
   computed: {
@@ -265,6 +255,9 @@ export default {
       this.tickers
           .filter(t => t.name === tickerName)
           .forEach(t => {
+            if (t === this.selectedTicker) {
+              this.graph.push(price);
+            }
             t.price = price;
           });
     },
@@ -286,7 +279,7 @@ export default {
       this.ticker = "";
       this.filter = "";
       subscribeToTicker(currentTicker.name, newPrice =>
-          this.updateTicker(currentTicker.name, newPrice) // как сюда новая цена попадает???
+          this.updateTicker(currentTicker.name, newPrice)
       );
     },
 
@@ -310,8 +303,9 @@ export default {
     },
 
     tickers(newValue, oldValue) {
+      // Почему не сработал watch при добавлении?
       console.log(newValue === oldValue);
-      localStorage.setItem("cryptonomicon-list", JSON.stringify(this.tickers)); // при изменении добавленных тикеров весь список загружается в localStorage
+      localStorage.setItem("cryptonomicon-list", JSON.stringify(this.tickers));
     },
 
     paginatedTickers() {
@@ -324,7 +318,7 @@ export default {
       this.page = 1;
     },
 
-    pageStateOptions(value) {  // при изменении page или filter записываем изменения в адресную строку
+    pageStateOptions(value) {
       window.history.pushState(
           null,
           document.title,
@@ -334,3 +328,4 @@ export default {
   }
 };
 </script>
+
