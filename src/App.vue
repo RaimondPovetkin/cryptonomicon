@@ -73,8 +73,27 @@
 
       </tickers-graph>
 
-
     </div>
+
+
+
+    <button @click="openModal = true">
+      click
+    </button>
+
+
+
+    <modal-card @click-close="openModal = false" v-if="openModal" :items="tickers">
+      <template #item="data">
+        {{ data }}
+      </template>
+
+    </modal-card>
+
+
+
+
+
   </div>
 </template>
 
@@ -97,12 +116,15 @@
 import {subscribeToTicker, unsubscribeFromTicker, returnInvalidTickers} from "./api";
 import AddTicker from "@/components/AddTicker";
 import TickersGraph from "@/components/TickersGraph";
+import ModalCard from "@/components/ModalCard";
+
 
 export default {
   name: "App",
-  components: {TickersGraph, AddTicker},
+  components: {TickersGraph, AddTicker, ModalCard, },
   data() {
     return {
+      openModal: false,
       filter: "",
       invalidTickers: [],
       tickers: [],
